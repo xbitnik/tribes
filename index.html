@@ -37,19 +37,25 @@
 
       <audio id="hoverSound" src="select.wav" preload="auto"></audio>
 
+<audio id="hoverSound" src="select.wav" preload="auto"></audio>
+
       <script>
          document.addEventListener('DOMContentLoaded', function() {
-            const sound = document.getElementById('hoverSound');
+            const soundNode = document.getElementById('hoverSound');
             const links = document.querySelectorAll('a');
 
             links.forEach(function(link) {
                link.addEventListener('mouseenter', function() {
-                  // Сбрасываем звук на начало, чтобы он играл при быстром переключении между ссылками
-                  sound.currentTime = 0; 
-                  // Запускаем звук. catch нужен, чтобы браузер не ругался в консоль, 
-                  // если пользователь еще не кликнул по странице (защита от автовоспроизведения)
-                  sound.play().catch(function(error) {
-                     // Ошибку можно игнорировать, она пропадет после первого клика по странице
+                  // Клонируем узел звука при каждом наведении.
+                  // Это избавляет от ошибок, если водить мышкой очень быстро.
+                  const clone = soundNode.cloneNode();
+                  
+                  // Обязательно устанавливаем громкость (от 0.0 до 1.0), иногда это помогает
+                  clone.volume = 0.5; 
+
+                  clone.play().catch(function(error) {
+                     // Выводим ошибку в консоль браузера (F12), чтобы было видно, если браузер блокирует звук
+                     console.log("Ждем первого клика по странице для разблокировки звука:", error.message);
                   });
                });
             });
