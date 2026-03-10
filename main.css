@@ -44,7 +44,7 @@ h1 {
 }
 
 .attract .logo {
-  padding-top: 4em;
+  padding-top: 1em;
   width: 90%;
   max-width: 900px;
 }
@@ -275,5 +275,6 @@ footer p {
 footer .esrb {
   float: right;
 }
+
 
 
