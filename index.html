@@ -34,32 +34,53 @@
       Made by Enforcer  &nbsp;:&nbsp;  Game updated on 10.03.2026  &nbsp;:&nbsp;  Players online - X
        <br><br></center>
       </footer>
-
-      <audio id="hoverSound" src="select.wav" preload="auto"></audio>
-
-<audio id="hoverSound" src="select.wav" preload="auto"></audio>
-
-      <script>
+<script>
          document.addEventListener('DOMContentLoaded', function() {
-            const soundNode = document.getElementById('hoverSound');
+            // Инициализируем Web Audio API
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
+            let hoverBuffer = null;
+
+            // Загружаем файл select.wav в память браузера
+            fetch('select.wav')
+               .then(response => response.arrayBuffer())
+               .then(arrayBuffer => audioCtx.decodeAudioData(arrayBuffer))
+               .then(audioBuffer => {
+                  hoverBuffer = audioBuffer;
+               })
+               .catch(error => console.error("Ошибка загрузки звука:", error));
+
+            // Разблокируем звук по первому клику на странице (правило браузеров)
+            document.body.addEventListener('click', function() {
+               if (audioCtx.state === 'suspended') {
+                  audioCtx.resume();
+               }
+            }, { once: true });
+
             const links = document.querySelectorAll('a');
 
             links.forEach(function(link) {
                link.addEventListener('mouseenter', function() {
-                  // Клонируем узел звука при каждом наведении.
-                  // Это избавляет от ошибок, если водить мышкой очень быстро.
-                  const clone = soundNode.cloneNode();
-                  
-                  // Обязательно устанавливаем громкость (от 0.0 до 1.0), иногда это помогает
-                  clone.volume = 0.5; 
+                  // Если звук еще не загрузился или браузер ждет первого клика - ничего не делаем
+                  if (!hoverBuffer || audioCtx.state === 'suspended') return;
 
-                  clone.play().catch(function(error) {
-                     // Выводим ошибку в консоль браузера (F12), чтобы было видно, если браузер блокирует звук
-                     console.log("Ждем первого клика по странице для разблокировки звука:", error.message);
-                  });
+                  // Создаем источник звука и запускаем его (это происходит мгновенно)
+                  const source = audioCtx.createBufferSource();
+                  source.buffer = hoverBuffer;
+                  
+                  // Для регулировки громкости можно раскомментировать строки ниже:
+                  // const gainNode = audioCtx.createGain();
+                  // gainNode.gain.value = 0.5; // Громкость 50%
+                  // source.connect(gainNode);
+                  // gainNode.connect(audioCtx.destination);
+                  
+                  // Если громкость менять не нужно, подключаем напрямую:
+                  source.connect(audioCtx.destination);
+                  source.start(0);
                });
             });
          });
       </script>
+     
    </body>
 </html>
