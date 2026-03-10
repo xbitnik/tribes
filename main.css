@@ -72,6 +72,108 @@ h1 {
   }
 }
 
+.attract .quickconnect {
+  width: 276px;
+  height: 42px;
+  display: inline-block;
+  background: url("connect.png") no-repeat;
+  background-size: 100%;
+}
+
+@media (max-width: 1000px) {
+  .attract .quickconnect {
+    width: 276px;
+    height: 42px;
+  }
+}
+
+.attract .quickconnect:hover {
+  background-position: center bottom;
+  cursor: pointer;
+}
+
+
+.attract .playwithbots {
+  width: 276px;
+  height: 42px;
+  display: inline-block;
+  background: url("playbots.png") no-repeat;
+  background-size: 100%;
+}
+
+@media (max-width: 1000px) {
+  .attract .playwithbots {
+    width: 276px;
+    height: 42px;
+  }
+}
+
+.attract .playwithbots:hover {
+  background-position: center bottom;
+  cursor: pointer;
+}
+
+
+.attract .watchdemos {
+  width: 276px;
+  height: 42px;
+  display: inline-block;
+  background: url("watch.png") no-repeat;
+  background-size: 100%;
+}
+
+@media (max-width: 1000px) {
+  .attract .watchdemos {
+    width: 276px;
+    height: 42px;
+  }
+}
+
+.attract .watchdemos:hover {
+  background-position: center bottom;
+  cursor: pointer;
+}
+
+.attract .gameinfo {
+  width: 276px;
+  height: 42px;
+  display: inline-block;
+  background: url("gameinfo.png") no-repeat;
+  background-size: 100%;
+}
+
+@media (max-width: 1000px) {
+  .attract .gameinfo {
+    width: 276px;
+    height: 42px;
+  }
+}
+
+.attract .gameinfo:hover {
+  background-position: center bottom;
+  cursor: pointer;
+}
+
+.attract .downloadgame {
+  width: 276px;
+  height: 42px;
+  display: inline-block;
+  background: url("download.png") no-repeat;
+  background-size: 100%;
+}
+
+@media (max-width: 1000px) {
+  .attract .downloadgame {
+    width: 276px;
+    height: 42px;
+  }
+}
+
+.attract .downloadgame:hover {
+  background-position: center bottom;
+  cursor: pointer;
+}
+
 .attract .play-now {
   width: 276px;
   height: 42px;
@@ -173,4 +275,5 @@ footer p {
 footer .esrb {
   float: right;
 }
+
 
