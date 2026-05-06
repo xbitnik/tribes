@@ -95,6 +95,7 @@
             cursor: not-allowed;
         }
 
+        /* --- Новый HUD --- */
         #hud {
             position: absolute;
             top: 15px;
@@ -102,22 +103,40 @@
             right: 15px;
             display: flex;
             justify-content: space-between;
+            align-items: flex-start;
             pointer-events: auto;
             z-index: 5;
             display: none;
         }
 
+        #stats {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #FFEB3B; /* Желтый цвет для очков */
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #stats div {
+            margin: 2px 0;
+        }
+
         #timer {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: bold;
             background: rgba(0, 0, 0, 0.6);
-            padding: 5px 10px;
-            border-radius: 5px;
+            padding: 5px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
         #pauseBtn {
-            padding: 8px 20px;
-            font-size: 18px;
+            padding: 6px 14px;
+            font-size: 14px;
+            border-radius: 8px;
             background-color: #f44336;
         }
 
@@ -137,13 +156,17 @@
     <div id="ui-layer">
 
         <div id="hud">
+            <div id="stats">
+                <div id="scoreDisplay">Score: 0</div>
+                <div id="itemsDisplay">Items: 0</div>
+            </div>
             <div id="timer">00:00.00</div>
             <button id="pauseBtn">Pause</button>
         </div>
 
         <div id="startScreen" class="screen">
             <h1 id="startTitle">Fedorazzz Mazes :)</h1>
-            <div id="build-version">Build Version - 1.3</div>
+            <div id="build-version">Build Version - 1.4</div>
 
             <div id="sensor-error">
                 ERROR: Accelerometer blocked!<br>
@@ -161,7 +184,7 @@
 
         <div id="finishScreen" class="screen hidden">
             <h1>Level Complete!</h1>
-            <p id="finalTime" style="font-size: 26px; margin-bottom: 30px; font-weight: bold;"></p>
+            <p id="finalStats" style="font-size: 22px; margin-bottom: 30px; font-weight: bold; text-align: center; color: #FFEB3B;"></p>
             <button id="restartBtn">Play Again</button>
         </div>
 
@@ -177,9 +200,11 @@
         const finishScreen = document.getElementById('finishScreen');
         const hud = document.getElementById('hud');
         const timerEl = document.getElementById('timer');
-        const finalTimeEl = document.getElementById('finalTime');
+        const finalStatsEl = document.getElementById('finalStats');
         const errorEl = document.getElementById('sensor-error');
         const titleEl = document.getElementById('startTitle');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const itemsDisplay = document.getElementById('itemsDisplay');
 
         const startBtn = document.getElementById('startBtn');
         const pauseBtn = document.getElementById('pauseBtn');
@@ -188,33 +213,37 @@
 
         // Настройки игры
         const TILE_SIZE = 32;
-        const BALL_SIZE = 24; // Возвращаем единый размер шарика 24х24
+        const BALL_SIZE = 24;
 
         let cols, rows;
         let maze = [];
         let finishCell = { x: 0, y: 0 };
 
-        const wallImg = new Image();
-        wallImg.src = 'wall.png';
-        const ballImg = new Image();
-        ballImg.src = 'ball.png';
+        // Изображения
+        const wallImg = new Image(); wallImg.src = 'wall.png';
+        const ballImg = new Image(); ballImg.src = 'ball.png';
+        const it1Img = new Image();  it1Img.src = 'it1.png';
+        const exitImg = new Image(); exitImg.src = 'exit.png';
 
         let gameState = 'START';
 
-        // Переработанная физика (v1.3)
+        // Физика (v1.3)
         let ball = { x: 0, y: 0, vx: 0, vy: 0 };
-        const gravityScale = 0.45;   // Идеальное ускорение для лабиринта
-        const friction = 0.95;       // Трение (позволяет легче тормозить)
-        const bounceFactor = 0.35;   // Отскок (сбалансирован, чтобы шарик не бился как бешеный)
-        const maxSpeed = 9;          // Ограничитель скорости (предотвращает пролет сквозь стены)
+        const gravityScale = 0.45;
+        const friction = 0.95;
+        const bounceFactor = 0.35;
+        const maxSpeed = 9;
 
         let tiltX = 0;
         let tiltY = 0;
 
-        // Таймер
+        // Игровые данные (v1.4)
         let startTime = 0;
         let elapsedTime = 0;
         let timerInterval = null;
+        let score = 0;
+        let items = [];
+        let itemsRemaining = 0;
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -222,6 +251,15 @@
         }
         window.addEventListener('resize', resize);
         resize();
+
+        // Проигрывание звука
+        function playItemSound() {
+            try {
+                let snd = new Audio('it1.wav');
+                snd.volume = 0.7;
+                snd.play().catch(e => {}); // Игнорируем ошибки если браузер заблокировал звук
+            } catch(e) {}
+        }
 
         // --- Генерация Лабиринта ---
         function generateMaze() {
@@ -266,15 +304,44 @@
             ball.vx = 0;
             ball.vy = 0;
 
-            // Финиш
+            // Финиш (рассчитываем координаты, но пока не активируем)
             finishCell = { x: cols - 2, y: rows - 2 };
             while (maze[finishCell.x][finishCell.y] === 1) {
                 finishCell.x--;
                 if (finishCell.x <= 0) { finishCell.x = cols - 2; finishCell.y--; }
             }
+
+            // --- Расстановка предметов (v1.4) ---
+            items = [];
+            let emptyCells = [];
+            for(let c = 1; c < cols - 1; c++) {
+                for(let r = 1; r < rows - 1; r++) {
+                    // Ищем пустые клетки, исключая старт и финиш
+                    if(maze[c][r] === 0 && !(c === 1 && r === 1) && !(c === finishCell.x && r === finishCell.y)) {
+                        emptyCells.push({x: c, y: r});
+                    }
+                }
+            }
+
+            // Количество предметов зависит от размера карты (минимум 3)
+            let numItems = Math.max(3, Math.floor((cols * rows) / 45));
+            for(let i = 0; i < numItems && emptyCells.length > 0; i++) {
+                let idx = Math.floor(Math.random() * emptyCells.length);
+                let cell = emptyCells.splice(idx, 1)[0];
+                items.push({
+                    x: cell.x,
+                    y: cell.y,
+                    collected: false,
+                    scale: 1.0,
+                    alpha: 1.0
+                });
+            }
+            itemsRemaining = items.length;
+            score = 0;
+            updateHUD();
         }
 
-        // --- Сенсоры (Акселерометр) ---
+        // --- Сенсоры ---
         let sensorsActive = false;
 
         window.addEventListener("deviceorientation", (event) => {
@@ -314,9 +381,13 @@
             startBtn.innerText = 'START';
         }
 
-        // --- Улучшенная логика столкновений (v1.3) ---
+        function updateHUD() {
+            scoreDisplay.innerText = "Score: " + score;
+            itemsDisplay.innerText = "Items: " + itemsRemaining;
+        }
+
+        // --- Логика столкновений ---
         function resolveCollision(axis) {
-            // Вычисляем клетки сетки, которые сейчас задевает шарик
             let leftCol = Math.floor(ball.x / TILE_SIZE);
             let rightCol = Math.floor((ball.x + BALL_SIZE - 0.1) / TILE_SIZE);
             let topRow = Math.floor(ball.y / TILE_SIZE);
@@ -324,27 +395,20 @@
 
             for (let c = leftCol; c <= rightCol; c++) {
                 for (let r = topRow; r <= bottomRow; r++) {
-                    // Если вышли за пределы или попали в стену (1)
                     if (c < 0 || c >= cols || r < 0 || r >= rows || maze[c][r] === 1) {
                         if (axis === 'x') {
-                            if (ball.vx > 0) {
-                                ball.x = c * TILE_SIZE - BALL_SIZE; // Удар правой стороной
-                            } else if (ball.vx < 0) {
-                                ball.x = (c + 1) * TILE_SIZE;       // Удар левой стороной
-                            }
+                            if (ball.vx > 0) ball.x = c * TILE_SIZE - BALL_SIZE;
+                            else if (ball.vx < 0) ball.x = (c + 1) * TILE_SIZE;
                             ball.vx *= -bounceFactor;
-                            if (Math.abs(ball.vx) < 0.5) ball.vx = 0; // Гасим микроотскоки
+                            if (Math.abs(ball.vx) < 0.5) ball.vx = 0;
                         }
                         else if (axis === 'y') {
-                            if (ball.vy > 0) {
-                                ball.y = r * TILE_SIZE - BALL_SIZE; // Удар низом
-                            } else if (ball.vy < 0) {
-                                ball.y = (r + 1) * TILE_SIZE;       // Удар верхом
-                            }
+                            if (ball.vy > 0) ball.y = r * TILE_SIZE - BALL_SIZE;
+                            else if (ball.vy < 0) ball.y = (r + 1) * TILE_SIZE;
                             ball.vy *= -bounceFactor;
                             if (Math.abs(ball.vy) < 0.5) ball.vy = 0;
                         }
-                        return; // Разрешили столкновение по оси, выходим
+                        return;
                     }
                 }
             }
@@ -353,45 +417,60 @@
         function updatePhysics() {
             if (gameState !== 'PLAYING') return;
 
-            // Вычисление ускорения через синус наклона
             let accelX = Math.sin(tiltX * Math.PI / 180) * gravityScale;
             let accelY = Math.sin(tiltY * Math.PI / 180) * gravityScale;
 
             ball.vx += accelX;
             ball.vy += accelY;
 
-            // Трение
             ball.vx *= friction;
             ball.vy *= friction;
 
-            // Ограничитель максимальной скорости
             if (ball.vx > maxSpeed) ball.vx = maxSpeed;
             if (ball.vx < -maxSpeed) ball.vx = -maxSpeed;
             if (ball.vy > maxSpeed) ball.vy = maxSpeed;
             if (ball.vy < -maxSpeed) ball.vy = -maxSpeed;
 
-            // Движение и обработка столкновений строго по осям!
-            // Двигаем X
             ball.x += ball.vx;
             resolveCollision('x');
 
-            // Двигаем Y
             ball.y += ball.vy;
             resolveCollision('y');
 
-            // --- Проверка Финиша ---
-            let finishRect = {
-                left: finishCell.x * TILE_SIZE, right: finishCell.x * TILE_SIZE + TILE_SIZE,
-                top: finishCell.y * TILE_SIZE, bottom: finishCell.y * TILE_SIZE + TILE_SIZE
-            };
+            // Проверка сбора предметов
+            let centerBallX = ball.x + BALL_SIZE / 2;
+            let centerBallY = ball.y + BALL_SIZE / 2;
 
-            // Центр шарика
-            let ballCenterX = ball.x + BALL_SIZE / 2;
-            let ballCenterY = ball.y + BALL_SIZE / 2;
+            items.forEach(item => {
+                if (!item.collected) {
+                    let ir = {
+                        left: item.x * TILE_SIZE, right: item.x * TILE_SIZE + TILE_SIZE,
+                        top: item.y * TILE_SIZE, bottom: item.y * TILE_SIZE + TILE_SIZE
+                    };
+                    // Проверка коллизии (AABB)
+                    if (ball.x < ir.right && ball.x + BALL_SIZE > ir.left &&
+                        ball.y < ir.bottom && ball.y + BALL_SIZE > ir.top) {
 
-            if (ballCenterX > finishRect.left && ballCenterX < finishRect.right &&
-                ballCenterY > finishRect.top && ballCenterY < finishRect.bottom) {
-                finishGame();
+                        item.collected = true;
+                        score += 100;
+                        itemsRemaining--;
+                        playItemSound();
+                        updateHUD();
+                    }
+                }
+            });
+
+            // Проверка финиша (Доступен ТОЛЬКО если все собрано)
+            if (itemsRemaining === 0) {
+                let finishRect = {
+                    left: finishCell.x * TILE_SIZE, right: finishCell.x * TILE_SIZE + TILE_SIZE,
+                    top: finishCell.y * TILE_SIZE, bottom: finishCell.y * TILE_SIZE + TILE_SIZE
+                };
+
+                if (centerBallX > finishRect.left && centerBallX < finishRect.right &&
+                    centerBallY > finishRect.top && centerBallY < finishRect.bottom) {
+                    finishGame();
+                }
             }
         }
 
@@ -419,16 +498,51 @@
                 }
             }
 
-            // Отрисовка финиша
-            ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
-            ctx.fillRect(finishCell.x * TILE_SIZE, finishCell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            ctx.fillStyle = '#FFF';
-            ctx.font = '20px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('??', finishCell.x * TILE_SIZE + TILE_SIZE/2, finishCell.y * TILE_SIZE + TILE_SIZE/2);
+            // Отрисовка Предметов (с анимацией исчезновения)
+            items.forEach(item => {
+                if (item.collected) {
+                    item.scale -= 0.08; // Скорость уменьшения
+                    item.alpha -= 0.08;
+                    if (item.scale < 0) item.scale = 0;
+                    if (item.alpha < 0) item.alpha = 0;
+                }
 
-            // Отрисовка шарика (оригинальный размер 24х24)
+                if (item.alpha > 0) {
+                    ctx.save();
+                    // Сдвигаем контекст в центр клетки для масштабирования
+                    let px = item.x * TILE_SIZE + TILE_SIZE / 2;
+                    let py = item.y * TILE_SIZE + TILE_SIZE / 2;
+                    ctx.translate(px, py);
+                    ctx.scale(item.scale, item.scale);
+                    ctx.globalAlpha = item.alpha;
+
+                    if (it1Img.complete && it1Img.naturalWidth > 0) {
+                        ctx.drawImage(it1Img, -TILE_SIZE/2, -TILE_SIZE/2, TILE_SIZE, TILE_SIZE);
+                    } else {
+                        // Фолбэк (золотой квадратик)
+                        ctx.fillStyle = '#FFD700';
+                        ctx.fillRect(-TILE_SIZE/4, -TILE_SIZE/4, TILE_SIZE/2, TILE_SIZE/2);
+                    }
+                    ctx.restore();
+                }
+            });
+
+            // Отрисовка Финиша (появляется только если itemsRemaining == 0)
+            if (itemsRemaining === 0) {
+                if (exitImg.complete && exitImg.naturalWidth > 0) {
+                    ctx.drawImage(exitImg, finishCell.x * TILE_SIZE, finishCell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                } else {
+                    ctx.fillStyle = 'rgba(76, 175, 80, 0.6)';
+                    ctx.fillRect(finishCell.x * TILE_SIZE, finishCell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    ctx.fillStyle = '#FFF';
+                    ctx.font = '20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('??', finishCell.x * TILE_SIZE + TILE_SIZE/2, finishCell.y * TILE_SIZE + TILE_SIZE/2);
+                }
+            }
+
+            // Отрисовка шарика
             if (ballImg.complete && ballImg.naturalWidth > 0) {
                 ctx.drawImage(ballImg, ball.x, ball.y, BALL_SIZE, BALL_SIZE);
             } else {
@@ -445,7 +559,6 @@
             requestAnimationFrame(loop);
         }
 
-        // --- Таймер ---
         function updateTimer() {
             let now = Date.now();
             let diff = elapsedTime + (now - startTime);
@@ -460,7 +573,6 @@
                 (ms < 10 ? '0' : '') + ms;
         }
 
-        // --- Управление ---
         function startGame() {
             if (!sensorsActive && location.protocol !== 'https:') {
                 alert("Game needs HTTPS to read accelerometer data.");
@@ -524,7 +636,7 @@
             updateTimer();
 
             hud.style.display = 'none';
-            finalTimeEl.innerText = "Time: " + timerEl.innerText;
+            finalStatsEl.innerHTML = `Time: ${timerEl.innerText}<br><br>Score: ${score}`;
             finishScreen.classList.remove('hidden');
         }
 
