@@ -46,9 +46,17 @@
         h1 {
             font-size: 36px;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 10px;
             color: #4CAF50;
             text-shadow: 2px 2px 4px #000;
+        }
+
+        #build-version {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+            font-weight: bold;
+            letter-spacing: 1px;
         }
 
         #sensor-error {
@@ -117,13 +125,6 @@
             background-color: #d32f2f;
         }
 
-        #build-version {
-            position: absolute;
-            bottom: 20px;
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-
         .hidden {
             display: none !important;
         }
@@ -142,13 +143,15 @@
 
         <div id="startScreen" class="screen">
             <h1 id="startTitle">Fedorazzz Mazes :)</h1>
+            <div id="build-version">Build Version - 1.3</div>
+
             <div id="sensor-error">
                 ERROR: Accelerometer blocked!<br>
                 Browsers require HTTPS for sensors.<br>
                 Please use a secure connection.
             </div>
+
             <button id="startBtn">START</button>
-            <div id="build-version">Build Version - 1.2</div>
         </div>
 
         <div id="pauseScreen" class="screen hidden">
@@ -185,8 +188,7 @@
 
         // Настройки игры
         const TILE_SIZE = 32;
-        const BALL_HITBOX = 24; // Логический размер (для скольжения)
-        const BALL_VISUAL = 32; // Визуальный размер (для отрисовки)
+        const BALL_SIZE = 24; // Возвращаем единый размер шарика 24х24
 
         let cols, rows;
         let maze = [];
@@ -199,12 +201,12 @@
 
         let gameState = 'START';
 
-        // Физика шарика
+        // Переработанная физика (v1.3)
         let ball = { x: 0, y: 0, vx: 0, vy: 0 };
-        const gravityScale = 0.6;    // Множитель силы "гравитации" от наклона
-        const friction = 0.98;       // Трение качения (чем ближе к 1, тем дольше катится)
-        const bounceFactor = 0.45;   // Сила отскока (0 - нет отскока, 1 - резиновый мяч)
-        const maxSpeed = 12;         // Максимальная скорость качения
+        const gravityScale = 0.45;   // Идеальное ускорение для лабиринта
+        const friction = 0.95;       // Трение (позволяет легче тормозить)
+        const bounceFactor = 0.35;   // Отскок (сбалансирован, чтобы шарик не бился как бешеный)
+        const maxSpeed = 9;          // Ограничитель скорости (предотвращает пролет сквозь стены)
 
         let tiltX = 0;
         let tiltY = 0;
@@ -259,8 +261,8 @@
             }
 
             // Старт
-            ball.x = 1 * TILE_SIZE + (TILE_SIZE - BALL_HITBOX) / 2;
-            ball.y = 1 * TILE_SIZE + (TILE_SIZE - BALL_HITBOX) / 2;
+            ball.x = 1 * TILE_SIZE + (TILE_SIZE - BALL_SIZE) / 2;
+            ball.y = 1 * TILE_SIZE + (TILE_SIZE - BALL_SIZE) / 2;
             ball.vx = 0;
             ball.vy = 0;
 
@@ -285,7 +287,6 @@
                 tiltX = event.gamma || 0;
                 tiltY = event.beta || 0;
 
-                // Ограничиваем угол (90 градусов = макс. сила)
                 if (tiltX > 90) tiltX = 90;
                 if (tiltX < -90) tiltX = -90;
                 if (tiltY > 90) tiltY = 90;
@@ -313,35 +314,46 @@
             startBtn.innerText = 'START';
         }
 
-        // --- Вспомогательная функция проверки стен для физики ---
-        // Возвращает прямоугольник первой стены, с которой пересекается шарик
-        function getIntersectingWall(bx, by) {
-            let leftCol = Math.floor(bx / TILE_SIZE);
-            let rightCol = Math.floor((bx + BALL_HITBOX - 0.1) / TILE_SIZE);
-            let topRow = Math.floor(by / TILE_SIZE);
-            let bottomRow = Math.floor((by + BALL_HITBOX - 0.1) / TILE_SIZE);
+        // --- Улучшенная логика столкновений (v1.3) ---
+        function resolveCollision(axis) {
+            // Вычисляем клетки сетки, которые сейчас задевает шарик
+            let leftCol = Math.floor(ball.x / TILE_SIZE);
+            let rightCol = Math.floor((ball.x + BALL_SIZE - 0.1) / TILE_SIZE);
+            let topRow = Math.floor(ball.y / TILE_SIZE);
+            let bottomRow = Math.floor((ball.y + BALL_SIZE - 0.1) / TILE_SIZE);
 
             for (let c = leftCol; c <= rightCol; c++) {
                 for (let r = topRow; r <= bottomRow; r++) {
-                    // Выход за границы считаем стеной
+                    // Если вышли за пределы или попали в стену (1)
                     if (c < 0 || c >= cols || r < 0 || r >= rows || maze[c][r] === 1) {
-                        return {
-                            left: c * TILE_SIZE,
-                            right: c * TILE_SIZE + TILE_SIZE,
-                            top: r * TILE_SIZE,
-                            bottom: r * TILE_SIZE + TILE_SIZE
-                        };
+                        if (axis === 'x') {
+                            if (ball.vx > 0) {
+                                ball.x = c * TILE_SIZE - BALL_SIZE; // Удар правой стороной
+                            } else if (ball.vx < 0) {
+                                ball.x = (c + 1) * TILE_SIZE;       // Удар левой стороной
+                            }
+                            ball.vx *= -bounceFactor;
+                            if (Math.abs(ball.vx) < 0.5) ball.vx = 0; // Гасим микроотскоки
+                        }
+                        else if (axis === 'y') {
+                            if (ball.vy > 0) {
+                                ball.y = r * TILE_SIZE - BALL_SIZE; // Удар низом
+                            } else if (ball.vy < 0) {
+                                ball.y = (r + 1) * TILE_SIZE;       // Удар верхом
+                            }
+                            ball.vy *= -bounceFactor;
+                            if (Math.abs(ball.vy) < 0.5) ball.vy = 0;
+                        }
+                        return; // Разрешили столкновение по оси, выходим
                     }
                 }
             }
-            return null; // Столкновений нет
         }
 
-        // --- Физика и Коллизии (Раздельные оси) ---
         function updatePhysics() {
             if (gameState !== 'PLAYING') return;
 
-            // Вычисляем ускорение по принципу наклонной плоскости (синус угла)
+            // Вычисление ускорения через синус наклона
             let accelX = Math.sin(tiltX * Math.PI / 180) * gravityScale;
             let accelY = Math.sin(tiltY * Math.PI / 180) * gravityScale;
 
@@ -352,50 +364,30 @@
             ball.vx *= friction;
             ball.vy *= friction;
 
-            // Ограничение максимальной скорости
+            // Ограничитель максимальной скорости
             if (ball.vx > maxSpeed) ball.vx = maxSpeed;
             if (ball.vx < -maxSpeed) ball.vx = -maxSpeed;
             if (ball.vy > maxSpeed) ball.vy = maxSpeed;
             if (ball.vy < -maxSpeed) ball.vy = -maxSpeed;
 
-            // --- ДВИЖЕНИЕ И СТОЛКНОВЕНИЯ ПО ОСИ X ---
+            // Движение и обработка столкновений строго по осям!
+            // Двигаем X
             ball.x += ball.vx;
-            let hitX = getIntersectingWall(ball.x, ball.y);
-            if (hitX) {
-                // Если врезались, выталкиваем шарик обратно
-                if (ball.vx > 0) {
-                    ball.x = hitX.left - BALL_HITBOX; // Врезались правой стороной
-                } else if (ball.vx < 0) {
-                    ball.x = hitX.right;              // Врезались левой стороной
-                }
-                // Отскок
-                ball.vx *= -bounceFactor;
-                // Гасим микро-отскоки, чтобы шарик не "дрожал"
-                if (Math.abs(ball.vx) < 0.5) ball.vx = 0;
-            }
+            resolveCollision('x');
 
-            // --- ДВИЖЕНИЕ И СТОЛКНОВЕНИЯ ПО ОСИ Y ---
+            // Двигаем Y
             ball.y += ball.vy;
-            let hitY = getIntersectingWall(ball.x, ball.y);
-            if (hitY) {
-                if (ball.vy > 0) {
-                    ball.y = hitY.top - BALL_HITBOX;  // Врезались низом
-                } else if (ball.vy < 0) {
-                    ball.y = hitY.bottom;             // Врезались верхом
-                }
-                ball.vy *= -bounceFactor;
-                if (Math.abs(ball.vy) < 0.5) ball.vy = 0;
-            }
+            resolveCollision('y');
 
-            // --- ПРОВЕРКА ФИНИША ---
+            // --- Проверка Финиша ---
             let finishRect = {
                 left: finishCell.x * TILE_SIZE, right: finishCell.x * TILE_SIZE + TILE_SIZE,
                 top: finishCell.y * TILE_SIZE, bottom: finishCell.y * TILE_SIZE + TILE_SIZE
             };
 
-            // Проверяем центр шарика
-            let ballCenterX = ball.x + BALL_HITBOX / 2;
-            let ballCenterY = ball.y + BALL_HITBOX / 2;
+            // Центр шарика
+            let ballCenterX = ball.x + BALL_SIZE / 2;
+            let ballCenterY = ball.y + BALL_SIZE / 2;
 
             if (ballCenterX > finishRect.left && ballCenterX < finishRect.right &&
                 ballCenterY > finishRect.top && ballCenterY < finishRect.bottom) {
@@ -427,7 +419,7 @@
                 }
             }
 
-            // Отрисовка зоны финиша
+            // Отрисовка финиша
             ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
             ctx.fillRect(finishCell.x * TILE_SIZE, finishCell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             ctx.fillStyle = '#FFF';
@@ -436,16 +428,13 @@
             ctx.textBaseline = 'middle';
             ctx.fillText('??', finishCell.x * TILE_SIZE + TILE_SIZE/2, finishCell.y * TILE_SIZE + TILE_SIZE/2);
 
-            // Отрисовка шарика (центрируем картинку 32x32 поверх хитбокса 24x24)
-            let drawX = ball.x - (BALL_VISUAL - BALL_HITBOX) / 2;
-            let drawY = ball.y - (BALL_VISUAL - BALL_HITBOX) / 2;
-
+            // Отрисовка шарика (оригинальный размер 24х24)
             if (ballImg.complete && ballImg.naturalWidth > 0) {
-                ctx.drawImage(ballImg, drawX, drawY, BALL_VISUAL, BALL_VISUAL);
+                ctx.drawImage(ballImg, ball.x, ball.y, BALL_SIZE, BALL_SIZE);
             } else {
                 ctx.fillStyle = '#2196F3';
                 ctx.beginPath();
-                ctx.arc(ball.x + BALL_HITBOX/2, ball.y + BALL_HITBOX/2, BALL_VISUAL/2, 0, Math.PI * 2);
+                ctx.arc(ball.x + BALL_SIZE/2, ball.y + BALL_SIZE/2, BALL_SIZE/2, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
