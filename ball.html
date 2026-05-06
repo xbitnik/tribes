@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fedorazzz Mazes :)</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .screen {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 36px;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #4CAF50;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        /* Стиль для сообщения об ошибке датчика */
+        #sensor-error {
+            display: none;
+            color: #ff4444;
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-align: center;
+            max-width: 80%;
+            border: 1px solid #ff4444;
+            padding: 10px;
+            background: rgba(255,0,0,0.1);
+        }
+
+        button {
+            padding: 15px 50px;
+            font-size: 24px;
+            font-weight: bold;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+            touch-action: manipulation;
+        }
+
+        button:active {
+            transform: scale(0.95);
+            background-color: #45a049;
+        }
+
+        /* Кнопка старт неактивна, пока не проверятся датчик */
+        button:disabled {
+            background-color: #555;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        #hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: auto;
+            z-index: 5;
+            display: none;
+        }
+
+        #timer {
+            font-size: 24px;
+            font-weight: bold;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        #pauseBtn {
+            padding: 8px 20px;
+            font-size: 18px;
+            background-color: #f44336;
+        }
+
+        #pauseBtn:active {
+            background-color: #d32f2f;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+
+        <div id="hud">
+            <div id="timer">00:00.00</div>
+            <button id="pauseBtn">Pause</button>
+        </div>
+
+        <div id="startScreen" class="screen">
+            <h1 id="startTitle">Fedorazzz Mazes :)</h1>
+            <!-- Сюда выводим ошибку если нет HTTPS -->
+            <div id="sensor-error">
+                ERROR: Accelerometer blocked!<br>
+                Browsers require HTTPS for sensors.<br>
+                Please use a secure connection.
+            </div>
+            <button id="startBtn">START</button>
+        </div>
+
+        <div id="pauseScreen" class="screen hidden">
+            <h1>Paused</h1>
+            <button id="resumeBtn">Resume</button>
+        </div>
+
+        <div id="finishScreen" class="screen hidden">
+            <h1>Level Complete!</h1>
+            <p id="finalTime" style="font-size: 26px; margin-bottom: 30px; font-weight: bold;"></p>
+            <button id="restartBtn">Play Again</button>
+        </div>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // UI Элементы
+        const startScreen = document.getElementById('startScreen');
+        const pauseScreen = document.getElementById('pauseScreen');
+        const finishScreen = document.getElementById('finishScreen');
+        const hud = document.getElementById('hud');
+        const timerEl = document.getElementById('timer');
+        const finalTimeEl = document.getElementById('finalTime');
+        const errorEl = document.getElementById('sensor-error');
+        const titleEl = document.getElementById('startTitle');
+
+        // Кнопки
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Настройки
+        const TILE_SIZE = 32;
+        const BALL_SIZE = 24;
+        let cols, rows;
+        let maze = [];
+        let finishCell = { x: 0, y: 0 };
+
+        const wallImg = new Image();
+        wallImg.src = 'wall.png';
+        const ballImg = new Image();
+        ballImg.src = 'ball.png';
+
+        // Состояние
+        let gameState = 'START';
+
+        let ball = { x: 0, y: 0, vx: 0, vy: 0 };
+        const friction = 0.85;
+        let tiltX = 0;
+        let tiltY = 0;
+
+        // Таймер
+        let startTime = 0;
+        let elapsedTime = 0;
+        let timerInterval = null;
+
+        // --- Обработка размеров ---
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Лабиринт ---
+        function generateMaze() {
+            cols = Math.floor(canvas.width / TILE_SIZE);
+            rows = Math.floor(canvas.height / TILE_SIZE);
+            if (cols % 2 === 0) cols--;
+            if (rows % 2 === 0) rows--;
+
+            const offsetX = (canvas.width - cols * TILE_SIZE) / 2;
+            const offsetY = (canvas.height - rows * TILE_SIZE) / 2;
+            ctx.setTransform(1, 0, 0, 1, offsetX, offsetY);
+
+            maze = Array(cols).fill().map(() => Array(rows).fill(1));
+
+            const stack = [];
+            let current = { x: 1, y: 1 };
+            maze[current.x][current.y] = 0;
+            stack.push(current);
+
+            while (stack.length > 0) {
+                current = stack[stack.length - 1];
+                let neighbors = [];
+
+                if (current.y - 2 > 0 && maze[current.x][current.y - 2] === 1) neighbors.push({ x: current.x, y: current.y - 2, dx: 0, dy: -1 });
+                if (current.x + 2 < cols - 1 && maze[current.x + 2][current.y] === 1) neighbors.push({ x: current.x + 2, y: current.y, dx: 1, dy: 0 });
+                if (current.y + 2 < rows - 1 && maze[current.x][current.y + 2] === 1) neighbors.push({ x: current.x, y: current.y + 2, dx: 0, dy: 1 });
+                if (current.x - 2 > 0 && maze[current.x - 2][current.y] === 1) neighbors.push({ x: current.x - 2, y: current.y, dx: -1, dy: 0 });
+
+                if (neighbors.length > 0) {
+                    let next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    maze[current.x + next.dx][current.y + next.dy] = 0;
+                    maze[next.x][next.y] = 0;
+                    stack.push(next);
+                } else {
+                    stack.pop();
+                }
+            }
+
+            ball.x = 1 * TILE_SIZE + (TILE_SIZE - BALL_SIZE) / 2;
+            ball.y = 1 * TILE_SIZE + (TILE_SIZE - BALL_SIZE) / 2;
+            ball.vx = 0;
+            ball.vy = 0;
+
+            finishCell = { x: cols - 2, y: rows - 2 };
+            while (maze[finishCell.x][finishCell.y] === 1) {
+                finishCell.x--;
+                if (finishCell.x <= 0) { finishCell.x = cols - 2; finishCell.y--; }
+            }
+        }
+
+        // --- Управление Акселерометром (Фикс и отладка) ---
+        let sensorsActive = false;
+
+        // Попытка сразу слушать событие
+        window.addEventListener("deviceorientation", (event) => {
+            // Если приходят не null значения, значит датчик работает
+            if (event.beta !== null && event.gamma !== null) {
+                sensorsActive = true;
+                hideError();
+
+                if (gameState !== 'PLAYING') return;
+
+                // Чуть сильнее чувствительность для фаерфокса
+                tiltX = event.gamma || 0; // влево/вправо
+                tiltY = event.beta || 0; // вперед/назад
+
+                // Ограничиваем, чтобы не нужно было сильно наклонять телефон
+                if (tiltX > 45) tiltX = 45;
+                if (tiltX < -45) tiltX = -45;
+                if (tiltY > 45) tiltY = 45;
+                if (tiltY < -45) tiltY = -45;
+            }
+        }, true);
+
+        // Проверка через 500мс после загрузки: если sensorsActive все еще false - показываем ошибку
+        setTimeout(() => {
+            if (!sensorsActive) {
+                showError();
+            }
+        }, 800);
+
+        function showError() {
+            if (location.protocol !== 'https:') {
+                titleEl.style.display = 'none';
+                errorEl.style.display = 'block';
+                startBtn.disabled = true; // Выключаем кнопку, так как без датчиков играть нельзя
+                startBtn.innerText = 'HTTPS Required';
+            }
+        }
+
+        function hideError() {
+            titleEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            startBtn.disabled = false;
+            startBtn.innerText = 'START';
+        }
+
+
+        // --- Физика ---
+        function updatePhysics() {
+            if (gameState !== 'PLAYING') return;
+
+            // Коэффициент для Android Firefox
+            const sensitivity = 0.12;
+            ball.vx += tiltX * sensitivity;
+            ball.vy += tiltY * sensitivity;
+
+            ball.vx *= friction;
+            ball.vy *= friction;
+
+            let nextX = ball.x + ball.vx;
+            let nextY = ball.y + ball.vy;
+
+            let ballRect = {
+                left: nextX, right: nextX + BALL_SIZE,
+                top: nextY, bottom: nextY + BALL_SIZE
+            };
+
+            let collidedX = false;
+            let collidedY = false;
+
+            let gridX = Math.floor(ball.x / TILE_SIZE);
+            let gridY = Math.floor(ball.y / TILE_SIZE);
+
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    let cx = gridX + i;
+                    let cy = gridY + j;
+
+                    if (cx < 0 || cx >= cols || cy < 0 || cy >= rows || maze[cx][cy] === 0) continue;
+
+                    let wallRect = {
+                        left: cx * TILE_SIZE, right: cx * TILE_SIZE + TILE_SIZE,
+                        top: cy * TILE_SIZE, bottom: cy * TILE_SIZE + TILE_SIZE
+                    };
+
+                    if (ballRect.left < wallRect.right && ballRect.right > wallRect.left &&
+                        ball.y < wallRect.bottom && ball.y + BALL_SIZE > wallRect.top) {
+                        collidedX = true;
+                    }
+
+                    if (ballRect.top < wallRect.bottom && ballRect.bottom > wallRect.top &&
+                        ball.x < wallRect.right && ball.x + BALL_SIZE > wallRect.left) {
+                        collidedY = true;
+                    }
+                }
+            }
+
+            if (!collidedX) ball.x = nextX; else ball.vx = 0;
+            if (!collidedY) ball.y = nextY; else ball.vy = 0;
+
+            let finishRect = {
+                left: finishCell.x * TILE_SIZE, right: finishCell.x * TILE_SIZE + TILE_SIZE,
+                top: finishCell.y * TILE_SIZE, bottom: finishCell.y * TILE_SIZE + TILE_SIZE
+            };
+
+            let ballCenter = { x: ball.x + BALL_SIZE/2, y: ball.y + BALL_SIZE/2 };
+            if (ballCenter.x > finishRect.left && ballCenter.x < finishRect.right &&
+                ballCenter.y > finishRect.top && ballCenter.y < finishRect.bottom) {
+                finishGame();
+            }
+        }
+
+        // --- Отрисовка ---
+        function draw() {
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            if (gameState === 'START') return;
+
+            for (let x = 0; x < cols; x++) {
+                for (let y = 0; y < rows; y++) {
+                    if (maze[x][y] === 1) {
+                        if (wallImg.complete && wallImg.naturalWidth > 0) {
+                            ctx.drawImage(wallImg, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        } else {
+                            ctx.fillStyle = '#444';
+                            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        }
+                    }
+                }
+            }
+
+            // Finish
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
+            ctx.fillRect(finishCell.x * TILE_SIZE, finishCell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            ctx.fillStyle = '#FFF';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('??', finishCell.x * TILE_SIZE + TILE_SIZE/2, finishCell.y * TILE_SIZE + TILE_SIZE/2);
+
+            // Ball
+            if (ballImg.complete && ballImg.naturalWidth > 0) {
+                ctx.drawImage(ballImg, ball.x, ball.y, BALL_SIZE, BALL_SIZE);
+            } else {
+                ctx.fillStyle = '#2196F3';
+                ctx.beginPath();
+                ctx.arc(ball.x + BALL_SIZE/2, ball.y + BALL_SIZE/2, BALL_SIZE/2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // --- Loop ---
+        function loop() {
+            updatePhysics();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // --- Timer ---
+        function updateTimer() {
+            let now = Date.now();
+            let diff = elapsedTime + (now - startTime);
+
+            let minutes = Math.floor(diff / 60000);
+            let seconds = Math.floor((diff % 60000) / 1000);
+            let ms = Math.floor((diff % 1000) / 10);
+
+            timerEl.innerText =
+                (minutes < 10 ? '0' : '') + minutes + ':' +
+                (seconds < 10 ? '0' : '') + seconds + '.' +
+                (ms < 10 ? '0' : '') + ms;
+        }
+
+        // --- States ---
+        function startGame() {
+            // Без датчиков не пускаем
+            if (!sensorsActive && location.protocol !== 'https:') {
+                alert("Game needs HTTPS to read accelerometer data.");
+                return;
+            }
+
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(e => console.log(e));
+            }
+
+            // На iOS нужен запрос прав, на Android Firefox обычно нет, но если HTTPS не подхватился, выводим алерт.
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') initLevel();
+                        else alert("Accelerometer permission denied.");
+                    })
+                    .catch(console.error);
+            } else {
+                if (sensorsActive) {
+                    initLevel();
+                } else {
+                    alert("Accelerometer not detected or blocked (needs HTTPS).");
+                }
+            }
+        }
+
+        function initLevel() {
+            startScreen.classList.add('hidden');
+            finishScreen.classList.add('hidden');
+            hud.style.display = 'flex';
+
+            generateMaze();
+
+            gameState = 'PLAYING';
+            elapsedTime = 0;
+            startTime = Date.now();
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 30);
+        }
+
+        function togglePause() {
+            if (gameState === 'PLAYING') {
+                gameState = 'PAUSED';
+                clearInterval(timerInterval);
+                elapsedTime += Date.now() - startTime;
+                pauseScreen.classList.remove('hidden');
+                hud.style.display = 'none';
+            } else if (gameState === 'PAUSED') {
+                gameState = 'PLAYING';
+                startTime = Date.now();
+                timerInterval = setInterval(updateTimer, 30);
+                pauseScreen.classList.add('hidden');
+                hud.style.display = 'flex';
+            }
+        }
+
+        function finishGame() {
+            gameState = 'FINISHED';
+            clearInterval(timerInterval);
+            elapsedTime += Date.now() - startTime;
+            updateTimer();
+
+            hud.style.display = 'none';
+            finalTimeEl.innerText = "Time: " + timerEl.innerText;
+            finishScreen.classList.remove('hidden');
+        }
+
+        // Кнопки
+        startBtn.addEventListener('click', startGame);
+        pauseBtn.addEventListener('click', togglePause);
+        resumeBtn.addEventListener('click', togglePause);
+        restartBtn.addEventListener('click', initLevel);
+
+        requestAnimationFrame(loop);
+
+    </script>
+</body>
+</html>
