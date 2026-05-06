@@ -95,7 +95,7 @@
             cursor: not-allowed;
         }
 
-        /* --- Новый HUD --- */
+        /* --- HUD --- */
         #hud {
             position: absolute;
             top: 15px;
@@ -113,16 +113,14 @@
             background: rgba(0, 0, 0, 0.6);
             padding: 6px 10px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: bold;
-            color: #FFEB3B; /* Желтый цвет для очков */
+            color: #FFEB3B;
             letter-spacing: 0.5px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
-        #stats div {
-            margin: 2px 0;
-        }
+        #stats div { margin: 3px 0; }
 
         #timer {
             font-size: 20px;
@@ -134,19 +132,15 @@
         }
 
         #pauseBtn {
-            padding: 6px 14px;
+            padding: 8px 16px;
             font-size: 14px;
             border-radius: 8px;
             background-color: #f44336;
         }
 
-        #pauseBtn:active {
-            background-color: #d32f2f;
-        }
+        #pauseBtn:active { background-color: #d32f2f; }
 
-        .hidden {
-            display: none !important;
-        }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
@@ -166,12 +160,11 @@
 
         <div id="startScreen" class="screen">
             <h1 id="startTitle">Fedorazzz Mazes :)</h1>
-            <div id="build-version">Build Version - 1.4</div>
+            <div id="build-version">Build Version - 1.5</div>
 
             <div id="sensor-error">
                 ERROR: Accelerometer blocked!<br>
-                Browsers require HTTPS for sensors.<br>
-                Please use a secure connection.
+                Browsers require HTTPS for sensors.
             </div>
 
             <button id="startBtn">START</button>
@@ -211,13 +204,19 @@
         const resumeBtn = document.getElementById('resumeBtn');
         const restartBtn = document.getElementById('restartBtn');
 
-        // Настройки игры
+        // Настройки мира
         const TILE_SIZE = 32;
         const BALL_SIZE = 24;
 
-        let cols, rows;
+        // Фиксированный размер огромного лабиринта
+        const WORLD_COLS = 75;
+        const WORLD_ROWS = 75;
+
         let maze = [];
         let finishCell = { x: 0, y: 0 };
+
+        // Камера
+        let camera = { x: 0, y: 0 };
 
         // Изображения
         const wallImg = new Image(); wallImg.src = 'wall.png';
@@ -227,17 +226,16 @@
 
         let gameState = 'START';
 
-        // Физика (v1.3)
+        // Физика (v1.5)
         let ball = { x: 0, y: 0, vx: 0, vy: 0 };
-        const gravityScale = 0.45;
-        const friction = 0.95;
-        const bounceFactor = 0.35;
-        const maxSpeed = 9;
+        const gravityScale = 0.5;
+        const friction = 0.96;
+        const bounceFactor = 0.6; // Увеличен базовый отскок
+        const maxSpeed = 12;
 
         let tiltX = 0;
         let tiltY = 0;
 
-        // Игровые данные (v1.4)
         let startTime = 0;
         let elapsedTime = 0;
         let timerInterval = null;
@@ -252,40 +250,31 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // Проигрывание звука
         function playItemSound() {
             try {
                 let snd = new Audio('it1.wav');
                 snd.volume = 0.7;
-                snd.play().catch(e => {}); // Игнорируем ошибки если браузер заблокировал звук
+                snd.play().catch(e => {});
             } catch(e) {}
         }
 
-        // --- Генерация Лабиринта ---
+        // --- Генерация Лабиринта и Комнат (v1.5) ---
         function generateMaze() {
-            cols = Math.floor(canvas.width / TILE_SIZE);
-            rows = Math.floor(canvas.height / TILE_SIZE);
-            if (cols % 2 === 0) cols--;
-            if (rows % 2 === 0) rows--;
-
-            const offsetX = (canvas.width - cols * TILE_SIZE) / 2;
-            const offsetY = (canvas.height - rows * TILE_SIZE) / 2;
-            ctx.setTransform(1, 0, 0, 1, offsetX, offsetY);
-
-            maze = Array(cols).fill().map(() => Array(rows).fill(1));
+            maze = Array(WORLD_COLS).fill().map(() => Array(WORLD_ROWS).fill(1));
 
             const stack = [];
             let current = { x: 1, y: 1 };
             maze[current.x][current.y] = 0;
             stack.push(current);
 
+            // 1. Стандартный DFS лабиринт
             while (stack.length > 0) {
                 current = stack[stack.length - 1];
                 let neighbors = [];
 
                 if (current.y - 2 > 0 && maze[current.x][current.y - 2] === 1) neighbors.push({ x: current.x, y: current.y - 2, dx: 0, dy: -1 });
-                if (current.x + 2 < cols - 1 && maze[current.x + 2][current.y] === 1) neighbors.push({ x: current.x + 2, y: current.y, dx: 1, dy: 0 });
-                if (current.y + 2 < rows - 1 && maze[current.x][current.y + 2] === 1) neighbors.push({ x: current.x, y: current.y + 2, dx: 0, dy: 1 });
+                if (current.x + 2 < WORLD_COLS - 1 && maze[current.x + 2][current.y] === 1) neighbors.push({ x: current.x + 2, y: current.y, dx: 1, dy: 0 });
+                if (current.y + 2 < WORLD_ROWS - 1 && maze[current.x][current.y + 2] === 1) neighbors.push({ x: current.x, y: current.y + 2, dx: 0, dy: 1 });
                 if (current.x - 2 > 0 && maze[current.x - 2][current.y] === 1) neighbors.push({ x: current.x - 2, y: current.y, dx: -1, dy: 0 });
 
                 if (neighbors.length > 0) {
@@ -298,33 +287,45 @@
                 }
             }
 
+            // 2. Генерация Комнат
+            const numRooms = 15; // Количество комнат
+            for (let i = 0; i < numRooms; i++) {
+                // Размер комнаты от 2x2 до 5x5 блоков (от 64x64 до 160x160 пикселей)
+                let rw = Math.floor(Math.random() * 4) + 2;
+                let rh = Math.floor(Math.random() * 4) + 2;
+                let rx = Math.floor(Math.random() * (WORLD_COLS - rw - 2)) + 1;
+                let ry = Math.floor(Math.random() * (WORLD_ROWS - rh - 2)) + 1;
+
+                for (let x = rx; x < rx + rw; x++) {
+                    for (let y = ry; y < ry + rh; y++) {
+                        maze[x][y] = 0; // Вырубаем стены
+                    }
+                }
+            }
+
             // Старт
             ball.x = 1 * TILE_SIZE + (TILE_SIZE - BALL_SIZE) / 2;
             ball.y = 1 * TILE_SIZE + (TILE_SIZE - BALL_SIZE) / 2;
             ball.vx = 0;
             ball.vy = 0;
 
-            // Финиш (рассчитываем координаты, но пока не активируем)
-            finishCell = { x: cols - 2, y: rows - 2 };
-            while (maze[finishCell.x][finishCell.y] === 1) {
-                finishCell.x--;
-                if (finishCell.x <= 0) { finishCell.x = cols - 2; finishCell.y--; }
-            }
+            // Камера на старте
+            camera.x = ball.x - canvas.width / 2;
+            camera.y = ball.y - canvas.height / 2;
 
-            // --- Расстановка предметов (v1.4) ---
+            // --- Расстановка предметов (v1.5) ---
             items = [];
             let emptyCells = [];
-            for(let c = 1; c < cols - 1; c++) {
-                for(let r = 1; r < rows - 1; r++) {
-                    // Ищем пустые клетки, исключая старт и финиш
-                    if(maze[c][r] === 0 && !(c === 1 && r === 1) && !(c === finishCell.x && r === finishCell.y)) {
+            for(let c = 1; c < WORLD_COLS - 1; c++) {
+                for(let r = 1; r < WORLD_ROWS - 1; r++) {
+                    if(maze[c][r] === 0 && !(c === 1 && r === 1)) {
                         emptyCells.push({x: c, y: r});
                     }
                 }
             }
 
-            // Количество предметов зависит от размера карты (минимум 3)
-            let numItems = Math.max(3, Math.floor((cols * rows) / 45));
+            // Больше предметов для большого уровня (25-30 штук)
+            let numItems = 25;
             for(let i = 0; i < numItems && emptyCells.length > 0; i++) {
                 let idx = Math.floor(Math.random() * emptyCells.length);
                 let cell = emptyCells.splice(idx, 1)[0];
@@ -337,13 +338,21 @@
                 });
             }
             itemsRemaining = items.length;
+
+            // Случайный Выход (берем одну из оставшихся пустых клеток подальше от старта)
+            let validExits = emptyCells.filter(c => c.x > WORLD_COLS/2 || c.y > WORLD_ROWS/2);
+            if (validExits.length > 0) {
+                finishCell = validExits[Math.floor(Math.random() * validExits.length)];
+            } else {
+                finishCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            }
+
             score = 0;
             updateHUD();
         }
 
         // --- Сенсоры ---
         let sensorsActive = false;
-
         window.addEventListener("deviceorientation", (event) => {
             if (event.beta !== null && event.gamma !== null) {
                 sensorsActive = true;
@@ -361,9 +370,7 @@
             }
         }, true);
 
-        setTimeout(() => {
-            if (!sensorsActive) showError();
-        }, 800);
+        setTimeout(() => { if (!sensorsActive) showError(); }, 800);
 
         function showError() {
             if (location.protocol !== 'https:') {
@@ -373,7 +380,6 @@
                 startBtn.innerText = 'HTTPS Required';
             }
         }
-
         function hideError() {
             titleEl.style.display = 'block';
             errorEl.style.display = 'none';
@@ -386,7 +392,35 @@
             itemsDisplay.innerText = "Items: " + itemsRemaining;
         }
 
-        // --- Логика столкновений ---
+        // --- Умная Камера (v1.5) ---
+        function updateCamera() {
+            // Мертвая зона (Deadzone): камера не двигается, пока шарик в центральных 40% экрана
+            let marginX = canvas.width * 0.3;
+            let marginY = canvas.height * 0.3;
+
+            // Позиция шарика относительно экрана
+            let screenBallX = ball.x - camera.x;
+            let screenBallY = ball.y - camera.y;
+
+            // Плавное следование, если шарик выходит за margin
+            if (screenBallX < marginX) {
+                camera.x -= (marginX - screenBallX) * 0.15;
+            } else if (screenBallX > canvas.width - marginX) {
+                camera.x += (screenBallX - (canvas.width - marginX)) * 0.15;
+            }
+
+            if (screenBallY < marginY) {
+                camera.y -= (marginY - screenBallY) * 0.15;
+            } else if (screenBallY > canvas.height - marginY) {
+                camera.y += (screenBallY - (canvas.height - marginY)) * 0.15;
+            }
+
+            // Ограничение камеры краями карты
+            camera.x = Math.max(0, Math.min(camera.x, WORLD_COLS * TILE_SIZE - canvas.width));
+            camera.y = Math.max(0, Math.min(camera.y, WORLD_ROWS * TILE_SIZE - canvas.height));
+        }
+
+        // --- Улучшенная логика столкновений (v1.5) ---
         function resolveCollision(axis) {
             let leftCol = Math.floor(ball.x / TILE_SIZE);
             let rightCol = Math.floor((ball.x + BALL_SIZE - 0.1) / TILE_SIZE);
@@ -395,18 +429,28 @@
 
             for (let c = leftCol; c <= rightCol; c++) {
                 for (let r = topRow; r <= bottomRow; r++) {
-                    if (c < 0 || c >= cols || r < 0 || r >= rows || maze[c][r] === 1) {
+                    if (c < 0 || c >= WORLD_COLS || r < 0 || r >= WORLD_ROWS || maze[c][r] === 1) {
+
                         if (axis === 'x') {
                             if (ball.vx > 0) ball.x = c * TILE_SIZE - BALL_SIZE;
                             else if (ball.vx < 0) ball.x = (c + 1) * TILE_SIZE;
-                            ball.vx *= -bounceFactor;
-                            if (Math.abs(ball.vx) < 0.5) ball.vx = 0;
+
+                            // Динамический отскок (чем выше скорость, тем сильнее пружинит)
+                            if (Math.abs(ball.vx) > 1.5) {
+                                ball.vx *= -bounceFactor;
+                            } else {
+                                ball.vx = 0; // Мелкая скорость гасится полностью (нет дребезжания)
+                            }
                         }
                         else if (axis === 'y') {
                             if (ball.vy > 0) ball.y = r * TILE_SIZE - BALL_SIZE;
                             else if (ball.vy < 0) ball.y = (r + 1) * TILE_SIZE;
-                            ball.vy *= -bounceFactor;
-                            if (Math.abs(ball.vy) < 0.5) ball.vy = 0;
+
+                            if (Math.abs(ball.vy) > 1.5) {
+                                ball.vy *= -bounceFactor;
+                            } else {
+                                ball.vy = 0;
+                            }
                         }
                         return;
                     }
@@ -437,6 +481,8 @@
             ball.y += ball.vy;
             resolveCollision('y');
 
+            updateCamera();
+
             // Проверка сбора предметов
             let centerBallX = ball.x + BALL_SIZE / 2;
             let centerBallY = ball.y + BALL_SIZE / 2;
@@ -447,7 +493,6 @@
                         left: item.x * TILE_SIZE, right: item.x * TILE_SIZE + TILE_SIZE,
                         top: item.y * TILE_SIZE, bottom: item.y * TILE_SIZE + TILE_SIZE
                     };
-                    // Проверка коллизии (AABB)
                     if (ball.x < ir.right && ball.x + BALL_SIZE > ir.left &&
                         ball.y < ir.bottom && ball.y + BALL_SIZE > ir.top) {
 
@@ -460,7 +505,7 @@
                 }
             });
 
-            // Проверка финиша (Доступен ТОЛЬКО если все собрано)
+            // Проверка финиша
             if (itemsRemaining === 0) {
                 let finishRect = {
                     left: finishCell.x * TILE_SIZE, right: finishCell.x * TILE_SIZE + TILE_SIZE,
@@ -474,19 +519,29 @@
             }
         }
 
-        // --- Отрисовка ---
+        // --- Оптимизированная Отрисовка (Culling) ---
         function draw() {
             ctx.save();
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.restore();
 
-            if (gameState === 'START') return;
+            if (gameState === 'START') {
+                ctx.restore();
+                return;
+            }
 
-            // Отрисовка стен
-            for (let x = 0; x < cols; x++) {
-                for (let y = 0; y < rows; y++) {
+            // Сдвигаем контекст в обратную сторону от камеры
+            ctx.translate(-camera.x, -camera.y);
+
+            // Вычисляем видимую зону (чтобы не рисовать весь огромный лабиринт)
+            let startCol = Math.max(0, Math.floor(camera.x / TILE_SIZE));
+            let endCol = Math.min(WORLD_COLS, Math.ceil((camera.x + canvas.width) / TILE_SIZE));
+            let startRow = Math.max(0, Math.floor(camera.y / TILE_SIZE));
+            let endRow = Math.min(WORLD_ROWS, Math.ceil((camera.y + canvas.height) / TILE_SIZE));
+
+            // Рисуем только видимые стены
+            for (let x = startCol; x < endCol; x++) {
+                for (let y = startRow; y < endRow; y++) {
                     if (maze[x][y] === 1) {
                         if (wallImg.complete && wallImg.naturalWidth > 0) {
                             ctx.drawImage(wallImg, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -498,36 +553,37 @@
                 }
             }
 
-            // Отрисовка Предметов (с анимацией исчезновения)
+            // Рисуем предметы (только те, что не исчезли окончательно)
             items.forEach(item => {
                 if (item.collected) {
-                    item.scale -= 0.08; // Скорость уменьшения
+                    item.scale -= 0.08;
                     item.alpha -= 0.08;
                     if (item.scale < 0) item.scale = 0;
                     if (item.alpha < 0) item.alpha = 0;
                 }
 
                 if (item.alpha > 0) {
-                    ctx.save();
-                    // Сдвигаем контекст в центр клетки для масштабирования
-                    let px = item.x * TILE_SIZE + TILE_SIZE / 2;
-                    let py = item.y * TILE_SIZE + TILE_SIZE / 2;
-                    ctx.translate(px, py);
-                    ctx.scale(item.scale, item.scale);
-                    ctx.globalAlpha = item.alpha;
+                    // Проверка видимости предмета
+                    if (item.x >= startCol && item.x <= endCol && item.y >= startRow && item.y <= endRow) {
+                        ctx.save();
+                        let px = item.x * TILE_SIZE + TILE_SIZE / 2;
+                        let py = item.y * TILE_SIZE + TILE_SIZE / 2;
+                        ctx.translate(px, py);
+                        ctx.scale(item.scale, item.scale);
+                        ctx.globalAlpha = item.alpha;
 
-                    if (it1Img.complete && it1Img.naturalWidth > 0) {
-                        ctx.drawImage(it1Img, -TILE_SIZE/2, -TILE_SIZE/2, TILE_SIZE, TILE_SIZE);
-                    } else {
-                        // Фолбэк (золотой квадратик)
-                        ctx.fillStyle = '#FFD700';
-                        ctx.fillRect(-TILE_SIZE/4, -TILE_SIZE/4, TILE_SIZE/2, TILE_SIZE/2);
+                        if (it1Img.complete && it1Img.naturalWidth > 0) {
+                            ctx.drawImage(it1Img, -TILE_SIZE/2, -TILE_SIZE/2, TILE_SIZE, TILE_SIZE);
+                        } else {
+                            ctx.fillStyle = '#FFD700';
+                            ctx.fillRect(-TILE_SIZE/4, -TILE_SIZE/4, TILE_SIZE/2, TILE_SIZE/2);
+                        }
+                        ctx.restore();
                     }
-                    ctx.restore();
                 }
             });
 
-            // Отрисовка Финиша (появляется только если itemsRemaining == 0)
+            // Рисуем Выход
             if (itemsRemaining === 0) {
                 if (exitImg.complete && exitImg.naturalWidth > 0) {
                     ctx.drawImage(exitImg, finishCell.x * TILE_SIZE, finishCell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -542,7 +598,7 @@
                 }
             }
 
-            // Отрисовка шарика
+            // Рисуем шарик
             if (ballImg.complete && ballImg.naturalWidth > 0) {
                 ctx.drawImage(ballImg, ball.x, ball.y, BALL_SIZE, BALL_SIZE);
             } else {
@@ -551,6 +607,8 @@
                 ctx.arc(ball.x + BALL_SIZE/2, ball.y + BALL_SIZE/2, BALL_SIZE/2, 0, Math.PI * 2);
                 ctx.fill();
             }
+
+            ctx.restore(); // Возвращаем контекст на место для отрисовки UI (если бы он был на канвасе)
         }
 
         function loop() {
