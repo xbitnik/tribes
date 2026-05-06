@@ -51,7 +51,6 @@
             text-shadow: 2px 2px 4px #000;
         }
 
-        /* Стиль для сообщения об ошибке датчика */
         #sensor-error {
             display: none;
             color: #ff4444;
@@ -82,7 +81,6 @@
             background-color: #45a049;
         }
 
-        /* Кнопка старт неактивна, пока не проверятся датчик */
         button:disabled {
             background-color: #555;
             box-shadow: none;
@@ -119,6 +117,13 @@
             background-color: #d32f2f;
         }
 
+        #build-version {
+            position: absolute;
+            bottom: 20px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
         .hidden {
             display: none !important;
         }
@@ -137,13 +142,13 @@
 
         <div id="startScreen" class="screen">
             <h1 id="startTitle">Fedorazzz Mazes :)</h1>
-            <!-- Сюда выводим ошибку если нет HTTPS -->
             <div id="sensor-error">
                 ERROR: Accelerometer blocked!<br>
                 Browsers require HTTPS for sensors.<br>
                 Please use a secure connection.
             </div>
             <button id="startBtn">START</button>
+            <div id="build-version">Build Version - 1.2</div>
         </div>
 
         <div id="pauseScreen" class="screen hidden">
@@ -173,15 +178,16 @@
         const errorEl = document.getElementById('sensor-error');
         const titleEl = document.getElementById('startTitle');
 
-        // Кнопки
         const startBtn = document.getElementById('startBtn');
         const pauseBtn = document.getElementById('pauseBtn');
         const resumeBtn = document.getElementById('resumeBtn');
         const restartBtn = document.getElementById('restartBtn');
 
-        // Настройки
+        // Настройки игры
         const TILE_SIZE = 32;
-        const BALL_SIZE = 24;
+        const BALL_HITBOX = 24; // Логический размер (для скольжения)
+        const BALL_VISUAL = 32; // Визуальный размер (для отрисовки)
+
         let cols, rows;
         let maze = [];
         let finishCell = { x: 0, y: 0 };
@@ -191,11 +197,15 @@
         const ballImg = new Image();
         ballImg.src = 'ball.png';
 
-        // Состояние
         let gameState = 'START';
 
+        // Физика шарика
         let ball = { x: 0, y: 0, vx: 0, vy: 0 };
-        const friction = 0.85;
+        const gravityScale = 0.6;    // Множитель силы "гравитации" от наклона
+        const friction = 0.98;       // Трение качения (чем ближе к 1, тем дольше катится)
+        const bounceFactor = 0.45;   // Сила отскока (0 - нет отскока, 1 - резиновый мяч)
+        const maxSpeed = 12;         // Максимальная скорость качения
+
         let tiltX = 0;
         let tiltY = 0;
 
@@ -204,7 +214,6 @@
         let elapsedTime = 0;
         let timerInterval = null;
 
-        // --- Обработка размеров ---
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -212,7 +221,7 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- Лабиринт ---
+        // --- Генерация Лабиринта ---
         function generateMaze() {
             cols = Math.floor(canvas.width / TILE_SIZE);
             rows = Math.floor(canvas.height / TILE_SIZE);
@@ -249,11 +258,13 @@
                 }
             }
 
-            ball.x = 1 * TILE_SIZE + (TILE_SIZE - BALL_SIZE) / 2;
-            ball.y = 1 * TILE_SIZE + (TILE_SIZE - BALL_SIZE) / 2;
+            // Старт
+            ball.x = 1 * TILE_SIZE + (TILE_SIZE - BALL_HITBOX) / 2;
+            ball.y = 1 * TILE_SIZE + (TILE_SIZE - BALL_HITBOX) / 2;
             ball.vx = 0;
             ball.vy = 0;
 
+            // Финиш
             finishCell = { x: cols - 2, y: rows - 2 };
             while (maze[finishCell.x][finishCell.y] === 1) {
                 finishCell.x--;
@@ -261,42 +272,36 @@
             }
         }
 
-        // --- Управление Акселерометром (Фикс и отладка) ---
+        // --- Сенсоры (Акселерометр) ---
         let sensorsActive = false;
 
-        // Попытка сразу слушать событие
         window.addEventListener("deviceorientation", (event) => {
-            // Если приходят не null значения, значит датчик работает
             if (event.beta !== null && event.gamma !== null) {
                 sensorsActive = true;
                 hideError();
 
                 if (gameState !== 'PLAYING') return;
 
-                // Чуть сильнее чувствительность для фаерфокса
-                tiltX = event.gamma || 0; // влево/вправо
-                tiltY = event.beta || 0; // вперед/назад
+                tiltX = event.gamma || 0;
+                tiltY = event.beta || 0;
 
-                // Ограничиваем, чтобы не нужно было сильно наклонять телефон
-                if (tiltX > 45) tiltX = 45;
-                if (tiltX < -45) tiltX = -45;
-                if (tiltY > 45) tiltY = 45;
-                if (tiltY < -45) tiltY = -45;
+                // Ограничиваем угол (90 градусов = макс. сила)
+                if (tiltX > 90) tiltX = 90;
+                if (tiltX < -90) tiltX = -90;
+                if (tiltY > 90) tiltY = 90;
+                if (tiltY < -90) tiltY = -90;
             }
         }, true);
 
-        // Проверка через 500мс после загрузки: если sensorsActive все еще false - показываем ошибку
         setTimeout(() => {
-            if (!sensorsActive) {
-                showError();
-            }
+            if (!sensorsActive) showError();
         }, 800);
 
         function showError() {
             if (location.protocol !== 'https:') {
                 titleEl.style.display = 'none';
                 errorEl.style.display = 'block';
-                startBtn.disabled = true; // Выключаем кнопку, так как без датчиков играть нельзя
+                startBtn.disabled = true;
                 startBtn.innerText = 'HTTPS Required';
             }
         }
@@ -308,68 +313,92 @@
             startBtn.innerText = 'START';
         }
 
+        // --- Вспомогательная функция проверки стен для физики ---
+        // Возвращает прямоугольник первой стены, с которой пересекается шарик
+        function getIntersectingWall(bx, by) {
+            let leftCol = Math.floor(bx / TILE_SIZE);
+            let rightCol = Math.floor((bx + BALL_HITBOX - 0.1) / TILE_SIZE);
+            let topRow = Math.floor(by / TILE_SIZE);
+            let bottomRow = Math.floor((by + BALL_HITBOX - 0.1) / TILE_SIZE);
 
-        // --- Физика ---
-        function updatePhysics() {
-            if (gameState !== 'PLAYING') return;
-
-            // Коэффициент для Android Firefox
-            const sensitivity = 0.12;
-            ball.vx += tiltX * sensitivity;
-            ball.vy += tiltY * sensitivity;
-
-            ball.vx *= friction;
-            ball.vy *= friction;
-
-            let nextX = ball.x + ball.vx;
-            let nextY = ball.y + ball.vy;
-
-            let ballRect = {
-                left: nextX, right: nextX + BALL_SIZE,
-                top: nextY, bottom: nextY + BALL_SIZE
-            };
-
-            let collidedX = false;
-            let collidedY = false;
-
-            let gridX = Math.floor(ball.x / TILE_SIZE);
-            let gridY = Math.floor(ball.y / TILE_SIZE);
-
-            for (let i = -1; i <= 1; i++) {
-                for (let j = -1; j <= 1; j++) {
-                    let cx = gridX + i;
-                    let cy = gridY + j;
-
-                    if (cx < 0 || cx >= cols || cy < 0 || cy >= rows || maze[cx][cy] === 0) continue;
-
-                    let wallRect = {
-                        left: cx * TILE_SIZE, right: cx * TILE_SIZE + TILE_SIZE,
-                        top: cy * TILE_SIZE, bottom: cy * TILE_SIZE + TILE_SIZE
-                    };
-
-                    if (ballRect.left < wallRect.right && ballRect.right > wallRect.left &&
-                        ball.y < wallRect.bottom && ball.y + BALL_SIZE > wallRect.top) {
-                        collidedX = true;
-                    }
-
-                    if (ballRect.top < wallRect.bottom && ballRect.bottom > wallRect.top &&
-                        ball.x < wallRect.right && ball.x + BALL_SIZE > wallRect.left) {
-                        collidedY = true;
+            for (let c = leftCol; c <= rightCol; c++) {
+                for (let r = topRow; r <= bottomRow; r++) {
+                    // Выход за границы считаем стеной
+                    if (c < 0 || c >= cols || r < 0 || r >= rows || maze[c][r] === 1) {
+                        return {
+                            left: c * TILE_SIZE,
+                            right: c * TILE_SIZE + TILE_SIZE,
+                            top: r * TILE_SIZE,
+                            bottom: r * TILE_SIZE + TILE_SIZE
+                        };
                     }
                 }
             }
+            return null; // Столкновений нет
+        }
 
-            if (!collidedX) ball.x = nextX; else ball.vx = 0;
-            if (!collidedY) ball.y = nextY; else ball.vy = 0;
+        // --- Физика и Коллизии (Раздельные оси) ---
+        function updatePhysics() {
+            if (gameState !== 'PLAYING') return;
 
+            // Вычисляем ускорение по принципу наклонной плоскости (синус угла)
+            let accelX = Math.sin(tiltX * Math.PI / 180) * gravityScale;
+            let accelY = Math.sin(tiltY * Math.PI / 180) * gravityScale;
+
+            ball.vx += accelX;
+            ball.vy += accelY;
+
+            // Трение
+            ball.vx *= friction;
+            ball.vy *= friction;
+
+            // Ограничение максимальной скорости
+            if (ball.vx > maxSpeed) ball.vx = maxSpeed;
+            if (ball.vx < -maxSpeed) ball.vx = -maxSpeed;
+            if (ball.vy > maxSpeed) ball.vy = maxSpeed;
+            if (ball.vy < -maxSpeed) ball.vy = -maxSpeed;
+
+            // --- ДВИЖЕНИЕ И СТОЛКНОВЕНИЯ ПО ОСИ X ---
+            ball.x += ball.vx;
+            let hitX = getIntersectingWall(ball.x, ball.y);
+            if (hitX) {
+                // Если врезались, выталкиваем шарик обратно
+                if (ball.vx > 0) {
+                    ball.x = hitX.left - BALL_HITBOX; // Врезались правой стороной
+                } else if (ball.vx < 0) {
+                    ball.x = hitX.right;              // Врезались левой стороной
+                }
+                // Отскок
+                ball.vx *= -bounceFactor;
+                // Гасим микро-отскоки, чтобы шарик не "дрожал"
+                if (Math.abs(ball.vx) < 0.5) ball.vx = 0;
+            }
+
+            // --- ДВИЖЕНИЕ И СТОЛКНОВЕНИЯ ПО ОСИ Y ---
+            ball.y += ball.vy;
+            let hitY = getIntersectingWall(ball.x, ball.y);
+            if (hitY) {
+                if (ball.vy > 0) {
+                    ball.y = hitY.top - BALL_HITBOX;  // Врезались низом
+                } else if (ball.vy < 0) {
+                    ball.y = hitY.bottom;             // Врезались верхом
+                }
+                ball.vy *= -bounceFactor;
+                if (Math.abs(ball.vy) < 0.5) ball.vy = 0;
+            }
+
+            // --- ПРОВЕРКА ФИНИША ---
             let finishRect = {
                 left: finishCell.x * TILE_SIZE, right: finishCell.x * TILE_SIZE + TILE_SIZE,
                 top: finishCell.y * TILE_SIZE, bottom: finishCell.y * TILE_SIZE + TILE_SIZE
             };
 
-            let ballCenter = { x: ball.x + BALL_SIZE/2, y: ball.y + BALL_SIZE/2 };
-            if (ballCenter.x > finishRect.left && ballCenter.x < finishRect.right &&
-                ballCenter.y > finishRect.top && ballCenter.y < finishRect.bottom) {
+            // Проверяем центр шарика
+            let ballCenterX = ball.x + BALL_HITBOX / 2;
+            let ballCenterY = ball.y + BALL_HITBOX / 2;
+
+            if (ballCenterX > finishRect.left && ballCenterX < finishRect.right &&
+                ballCenterY > finishRect.top && ballCenterY < finishRect.bottom) {
                 finishGame();
             }
         }
@@ -384,6 +413,7 @@
 
             if (gameState === 'START') return;
 
+            // Отрисовка стен
             for (let x = 0; x < cols; x++) {
                 for (let y = 0; y < rows; y++) {
                     if (maze[x][y] === 1) {
@@ -397,7 +427,7 @@
                 }
             }
 
-            // Finish
+            // Отрисовка зоны финиша
             ctx.fillStyle = 'rgba(76, 175, 80, 0.4)';
             ctx.fillRect(finishCell.x * TILE_SIZE, finishCell.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             ctx.fillStyle = '#FFF';
@@ -406,25 +436,27 @@
             ctx.textBaseline = 'middle';
             ctx.fillText('??', finishCell.x * TILE_SIZE + TILE_SIZE/2, finishCell.y * TILE_SIZE + TILE_SIZE/2);
 
-            // Ball
+            // Отрисовка шарика (центрируем картинку 32x32 поверх хитбокса 24x24)
+            let drawX = ball.x - (BALL_VISUAL - BALL_HITBOX) / 2;
+            let drawY = ball.y - (BALL_VISUAL - BALL_HITBOX) / 2;
+
             if (ballImg.complete && ballImg.naturalWidth > 0) {
-                ctx.drawImage(ballImg, ball.x, ball.y, BALL_SIZE, BALL_SIZE);
+                ctx.drawImage(ballImg, drawX, drawY, BALL_VISUAL, BALL_VISUAL);
             } else {
                 ctx.fillStyle = '#2196F3';
                 ctx.beginPath();
-                ctx.arc(ball.x + BALL_SIZE/2, ball.y + BALL_SIZE/2, BALL_SIZE/2, 0, Math.PI * 2);
+                ctx.arc(ball.x + BALL_HITBOX/2, ball.y + BALL_HITBOX/2, BALL_VISUAL/2, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
 
-        // --- Loop ---
         function loop() {
             updatePhysics();
             draw();
             requestAnimationFrame(loop);
         }
 
-        // --- Timer ---
+        // --- Таймер ---
         function updateTimer() {
             let now = Date.now();
             let diff = elapsedTime + (now - startTime);
@@ -439,9 +471,8 @@
                 (ms < 10 ? '0' : '') + ms;
         }
 
-        // --- States ---
+        // --- Управление ---
         function startGame() {
-            // Без датчиков не пускаем
             if (!sensorsActive && location.protocol !== 'https:') {
                 alert("Game needs HTTPS to read accelerometer data.");
                 return;
@@ -451,7 +482,6 @@
                 document.documentElement.requestFullscreen().catch(e => console.log(e));
             }
 
-            // На iOS нужен запрос прав, на Android Firefox обычно нет, но если HTTPS не подхватился, выводим алерт.
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
                 DeviceOrientationEvent.requestPermission()
                     .then(permissionState => {
@@ -509,11 +539,18 @@
             finishScreen.classList.remove('hidden');
         }
 
-        // Кнопки
-        startBtn.addEventListener('click', startGame);
-        pauseBtn.addEventListener('click', togglePause);
-        resumeBtn.addEventListener('click', togglePause);
-        restartBtn.addEventListener('click', initLevel);
+        function bindButton(btn, action) {
+            btn.addEventListener('click', action);
+            btn.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                action();
+            });
+        }
+
+        bindButton(startBtn, startGame);
+        bindButton(pauseBtn, togglePause);
+        bindButton(resumeBtn, togglePause);
+        bindButton(restartBtn, initLevel);
 
         requestAnimationFrame(loop);
 
