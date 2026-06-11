@@ -6,42 +6,180 @@
       <meta name="description" content="Play against players around the world in over 100 arenas, and a dozen game modes, in one of the most competitive shooters online today.">
       <meta name="keywords" content="quake,quakelive,id software,bethesda,zenimax">
       <meta name="viewport" content="width=device-width, initial-scale=1">
+
+      <!-- Подключаем геймерский шрифт Orbitron для текста и Noto Sans для остального -->
       <link href='https://fonts.googleapis.com/css?family=Noto+Sans:400,700' rel='stylesheet' type='text/css'>
+      <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+
       <link rel="stylesheet" href="normalize.css">
       <link rel="stylesheet" href="skeleton.css">
       <link rel="stylesheet" href="main.css">
       <link rel="icon" type="image/png" href="favicon.png">
+
+      <style>
+         /* Стили для контейнера с историей */
+         .story-container {
+            position: relative;
+            width: 90%;
+            max-width: 1000px; /* Сделал шире, так как шрифт теперь крупнее */
+            height: 46vh; /* Высота видимой области */
+            margin: 40px auto;
+            overflow: hidden;
+
+            /* Эффект растворения текста сверху и снизу (маска) */
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+         }
+
+         .story-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+
+            /* Новый крупный и красивый шрифт */
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            line-height: 1.7;
+            color: #f8f9fa; /* Ярко-белый */
+            /* text-shadow: 0px 0px 12px rgba(0, 180, 255, 0.8); /* Геймерское неоновое свечение */
+
+            /* Фикс появления: ставим блок текста сразу у нижней границы видимости */
+            top: 115%;
+
+            /* Аппаратное ускорение для идеальной плавности скролла */
+            will-change: transform;
+
+            /* Скорость анимации: 22 секунды (быстрее) */
+            animation: scroll-up 90s linear infinite;
+         }
+
+         .story-text p {
+            margin-bottom: 25px;
+         }
+
+         /* Анимация: едет от изначального top: 85% далеко вверх за пределы экрана */
+         @keyframes scroll-up {
+            0% {
+               transform: translateY(0);
+            }
+            100% {
+               transform: translateY(calc(-100% - 60vh));
+            }
+         }
+
+         .download-wrapper {
+            text-align: center;
+            margin-top: 40px;
+            position: relative;
+            z-index: 10;
+         }
+      </style>
    </head>
    <body>
       <div class="attract">
-       <video autoplay loop muted playsinline poster="placeholder.jpg">
+         <video autoplay loop muted playsinline poster="placeholder.jpg">
             <source src="loop.mp4" type="video/mp4">
-        </video>
+         </video>
          <div class="overlay">
-            <img class="logo" src="logo.png"/>
-            <br><br><br>
-            <a href="#" class="quickconnect"></a>
-             <br><br>
-            <a href="#" class="playwithbots"></a>
-             <br><br>
-            <a href="#" class="watchdemos"></a>
-             <br><br>
-             <a href="#" class="gameinfo"></a>
-             <br><br>
-            <a href="#" class="downloadgame"></a>
+
+            <div style="text-align: center; margin-top: 10px;">
+               <img class="logo" src="logo.png" alt="Tribes-X Logo"/>
+            </div>
+
+            <!-- Блок с прокручивающейся историей -->
+            <div class="story-container">
+               <div class="story-text">
+				  <p>A long time ago, the 2D shooter scene needed a massive evolution.</p>
+                  <p>The classic Need For Kill engine was amazing but stopped growing.</p>
+                  <p>A lone modder skipped the forum drama to build a hardcore beast.</p>
+                  <p>Tribes-X was born: hardcore multiplayer shooter based on modified engine.</p>
+                  <p>It brings Quake III Arena's legendary bloodbaths into pure 2D.</p>
+                  <p>The core code was pushed hard to break old NFK engine limitations.</p>
+                  <p>Now 16 players can join the chaos instead of the original eight.</p>
+                  <p>Fight real gamers and smart NapBots, and even custom monsters.</p>
+                  <p>Map design leaves old brick structures for wild new variety.</p>
+                  <p>TRX maps run faster, adding single-brick ladders and jump pads.</p>
+                  <p>Team up in COP maps for actual co-op story-driven progression.</p>
+                  <p>Train your raw aim on hardcore PRC maps to become a true arena legend.</p>
+                  <p>Love classic NFK? The mod is fully backward compatible for it.</p>
+                  <p>Play classic Deathmatch, Team Play, Domination, and fiery CTF.</p>
+				  <p>Game physics and core dynamics are tweaked for better flow.</p>
+                  <p>Mid-air jump mechanics feel smoother and highly responsive.</p>
+                  <p>Classic weapon parameters are rebalanced and vastly improved.</p>
+			      <p>Find Quad Damage to multiply your destruction and dominate the map.</p>
+                  <p>Total visual freedom: change plasma colors and glowing players.</p>
+                  <p>Maps load unique configs, custom animated sprites, and weather.</p>
+                  <p>You can even bump custom MP3 tracks via the in-game player.</p>
+				  <p>Build custom arenas with a simple and convenient map editor.</p>
+                  <p>Easily bring your own creative level designs to life.</p>
+                  <p>This is a pure standalone client with zero extra files needed.</p>
+                  <p>Load your weapons, grab the armor, and dominate the NFK planet.</p>
+                  <p>Welcome to the relentless, hardcore arena of Tribes-X.</p>
+
+		 <!--		  Long ago, the 2D arena shooter scene stopped evolving.
+
+
+<p>Need For Kill was legendary, but its engine stood still.</p>
+<p>While others debated every tiny change, one modder kept building.</p>
+<p>Years of experiments pushed the old engine beyond its limits.</p>
+<p>The result was Tribes-X.</p>
+<p>A hardcore multiplayer arena shooter forged from NFK.</p>
+<p>Inspired by Quake III Arena and rebuilt for pure 2D mayhem.</p>
+<p>The engine was heavily modified to unlock new possibilities.</p>
+<p>Up to 16 players can now battle in a single match.</p>
+<p>Fight skilled players, smart NapBots, and custom monsters.</p>
+<p>Classic NFK maps are fully supported and remain playable.</p>
+<p>At the same time, Tribes-X introduces entirely new worlds.</p>
+<p>Maps are larger, faster, and far more diverse than before.</p>
+<p>Leave endless brick corridors behind and enter real arenas.</p>
+<p>Run across one-brick ladders and launch through jump pads.</p>
+<p>Master PRC challenge maps and sharpen your combat skills.</p>
+<p>Explore story-driven cooperative adventures on COP maps.</p>
+<p>Physics have been refined for smoother and faster gameplay.</p>
+<p>Mid-air movement feels more responsive and rewarding.</p>
+<p>Weapons are rebalanced to create more dynamic battles.</p>
+<p>Find Quad Damage and unleash absolute destruction.</p>
+<p>Customize plasma colors, player glow, and visual effects.</p>
+<p>Maps can load unique configs, weather, and animations.</p>
+<p>The built-in MP3 player lets you use your own soundtrack.</p>
+<p>Create your own arenas with the included map editor.</p>
+<p>Bring your ideas to life without extra tools.</p>
+<p>No patches. No dependencies. No additional downloads.</p>
+<p>Just install, join the battle, and start fragging.</p>
+<p>Welcome to Tribes-X.</p>
+<p>The evolution NFK never expected.</p>
+
+-->
+
+
+			 </div>
+            </div>
+
+            <!-- Кнопка скачивания всегда внизу -->
+            <div class="download-wrapper">
+               <a href="#" class="downloadgame"></a>
+            </div>
+
          </div>
-         <footer class="row" align="center"><center>
-      Made by Enforcer  &nbsp;:&nbsp;  Game updated on 10.03.2026  &nbsp;:&nbsp;  Players online - X
-       <br><br></center>
-      </footer>
-<script>
+
+         <footer class="row" align="center">
+            <center>
+               Made by Enforcer  &nbsp;:&nbsp;  Game updated on 11.06.2026  &nbsp;:&nbsp; Discord chat &nbsp;:&nbsp; Players online - X
+               <br><br>
+            </center>
+         </footer>
+
+      </div>
+
+      <script>
          document.addEventListener('DOMContentLoaded', function() {
             // Инициализируем Web Audio API
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             const audioCtx = new AudioContext();
             let hoverBuffer = null;
 
-            // Загружаем файл select.wav в память браузера
             fetch('select.wav')
                .then(response => response.arrayBuffer())
                .then(arrayBuffer => audioCtx.decodeAudioData(arrayBuffer))
@@ -50,7 +188,6 @@
                })
                .catch(error => console.error("Ошибка загрузки звука:", error));
 
-            // Разблокируем звук по первому клику на странице (правило браузеров)
             document.body.addEventListener('click', function() {
                if (audioCtx.state === 'suspended') {
                   audioCtx.resume();
@@ -61,26 +198,14 @@
 
             links.forEach(function(link) {
                link.addEventListener('mouseenter', function() {
-                  // Если звук еще не загрузился или браузер ждет первого клика - ничего не делаем
                   if (!hoverBuffer || audioCtx.state === 'suspended') return;
-
-                  // Создаем источник звука и запускаем его (это происходит мгновенно)
                   const source = audioCtx.createBufferSource();
                   source.buffer = hoverBuffer;
-                  
-                  // Для регулировки громкости можно раскомментировать строки ниже:
-                  // const gainNode = audioCtx.createGain();
-                  // gainNode.gain.value = 0.5; // Громкость 50%
-                  // source.connect(gainNode);
-                  // gainNode.connect(audioCtx.destination);
-                  
-                  // Если громкость менять не нужно, подключаем напрямую:
                   source.connect(audioCtx.destination);
                   source.start(0);
                });
             });
          });
       </script>
-     
    </body>
 </html>
